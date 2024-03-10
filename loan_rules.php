@@ -54,6 +54,7 @@ if (isset($_POST['saveData'])) {
     $data['grace_periode'] = $dbs->escape_string(trim($_POST['gracePeriode']));
     $data['input_date'] = date('Y-m-d');
     $data['last_update'] = date('Y-m-d');
+    $data['max_fine'] = (int)$_POST['maxFine'];
     // create sql op object
     $sql_op = new simbio_dbop($dbs);
     if (isset($_POST['updateRecordID'])) {
@@ -74,7 +75,7 @@ if (isset($_POST['saveData'])) {
         $insert = $sql_op->insert('mst_loan_rules', $data);
         if ($insert) {
             toastr(__('New Loan Rules Successfully Saved'))->success();
-            echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(\''.$_SERVER['PHP_SELF'].'\');</script>';
+            echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(parent.jQuery.ajaxHistory[0].url);</script>';
         } else { toastr(__('Loan Rules FAILED to Save. Please Contact System Administrator')."\n".$sql_op->error)->error(); }
         exit();
     }
@@ -209,6 +210,9 @@ if (isset($_POST['detail']) OR (isset($_GET['action']) AND $_GET['action'] == 'd
     $form->addTextField('text', 'fineEachDay', __('Fines Each Day'), $rec_d['fine_each_day']??'0','class="form-control col-2"');
     // overdue grace periode
     $form->addTextField('text', 'gracePeriode', __('Overdue Grace Periode'), $rec_d['grace_periode']??'0','class="form-control col-2"');
+
+    // max fine each day
+    $form->addTextField('text', 'maxFine', __('Maksimal Denda'), $rec_d['max_fine']??'0','class="form-control col-2"');
 
     // edit mode messagge
     if ($form->edit_mode) {
