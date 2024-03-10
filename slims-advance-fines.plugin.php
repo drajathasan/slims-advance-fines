@@ -32,7 +32,8 @@ if (!function_exists('pluginUrl'))
 
 
 // Overriding existing submenu
-$plugins->registerMenu('system', __('System Configuration'), __DIR__ . '/system-config.php');
+$version = class_exists('SLiMS\Polyglot\Memory') ? '-dev.php' : '.php';
+$plugins->registerMenu('system', __('System Configuration'), __DIR__ . '/system-config' . $version);
 $plugins->registerMenu('circulation', __('Loan Rules'), __DIR__ . '/loan_rules.php');
 
 // Intercepting access to fines_list.php
