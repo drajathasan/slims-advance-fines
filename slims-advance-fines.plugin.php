@@ -39,7 +39,7 @@ $plugins->registerMenu('circulation', __('Loan Rules'), __DIR__ . '/loan_rules.p
 $plugins->register('admin_session_after_start', function() {
     global $sysconf,$dbs;
 
-    $trace = array_pop(debug_backtrace());
+    $trace = @array_pop(debug_backtrace());
     $match = basename($trace['file']) === 'fines_list.php';
     $notInArray = ($_SESSION['uid']??[]) > 1 && !in_array($_SESSION['uid']??0, config('advance-fines.allowed-users', []));
 

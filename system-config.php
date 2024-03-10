@@ -23,9 +23,7 @@
 
 // key to authenticate
 use SLiMS\SearchEngine\DefaultEngine;
-use SLiMS\Filesystems\Storage;
 use SLiMS\SearchEngine\Engine;
-use SLiMS\Polyglot\Memory;
 use SLiMS\Config;
 
 defined('INDEX_AUTH')  or die('Direct access is not allowed!');
@@ -45,35 +43,34 @@ if ($_SESSION['uid'] != 1) {
 }
 
 if (!function_exists('addOrUpdateSetting')) {
-    function addOrUpdateSetting($name, $value) {
-        global $dbs;
-        $sql_op = new simbio_dbop($dbs);
-        $name = $dbs->escape_string($name);
-        $data['setting_value'] = $dbs->escape_string(serialize($value));
+  function addOrUpdateSetting($name, $value) {
+      global $dbs;
+      $sql_op = new simbio_dbop($dbs);
+      $name = $dbs->escape_string($name);
+      $data['setting_value'] = $dbs->escape_string(serialize($value));
 
-        $query = $dbs->query("SELECT setting_value FROM setting WHERE setting_name = '{$name}'");
-        if ($query->num_rows > 0) {
-            // update
-            $sql_op->update('setting', $data, "setting_name='{$name}'");
-        } else {
-            // insert
-            $data['setting_name'] = $name;
-            $sql_op->insert('setting', $data);
-        }
-    }
+      $query = $dbs->query("SELECT setting_value FROM setting WHERE setting_name = '{$name}'");
+      if ($query->num_rows > 0) {
+          // update
+          $sql_op->update('setting', $data, "setting_name='{$name}'");
+      } else {
+          // insert
+          $data['setting_name'] = $name;
+          $sql_op->insert('setting', $data);
+      }
+  }
 }
 
-$imagesDisk = Storage::images();
 ?>
 <div class="menuBox">
-  <div class="menuBoxInner systemIcon">
-    <div class="per_title">
-      <h2><?php echo __('System Configuration'); ?></h2>
-    </div>
-    <div class="infoBox">
-      <?php echo __('Modify global application preferences'); ?>
-    </div>
+<div class="menuBoxInner systemIcon">
+  <div class="per_title">
+    <h2><?php echo __('System Configuration'); ?></h2>
   </div>
+  <div class="infoBox">
+    <?php echo __('Modify global application preferences'); ?>
+  </div>
+</div>
 </div>
 <?php
 /* main content */
@@ -82,185 +79,172 @@ $imagesDisk = Storage::images();
 
 /* remove logo */
 if (isset($_POST['removeImage'])) {
-      foreach (['limg' => 'logo_image','wimg' => 'webicon'] as $key => $data) {
-        if (isset($_POST[$key]))
-        {
-          if ($imagesDisk->isExists($path = 'default/'.$sysconf[$data])) {
-            $imagesDisk->delete($path);
-          }
-          addOrUpdateSetting($data, NULL); // set null
-        }
+    foreach (['limg' => 'logo_image','wimg' => 'webicon'] as $key => $data) {
+      if (isset($_POST[$key]))
+      {
+        @unlink(IMGBS.'default/'.$sysconf[$data]);
+        addOrUpdateSetting($data, NULL); // set null
       }
+    }
 
-      writeLog('staff', $_SESSION['uid'], 'system', $_SESSION['realname'].' remove logo', 'Logo', 'Delete');
-      utility::jsToastr(__('System Configuration'), __('Logo Image removed. Refreshing page'), 'success'); 
-      echo '<script type="text/javascript">setTimeout(() => {top.location.href = \''.AWB.'index.php?mod=system\'}, 2500)</script>';
-      exit();
+    utility::writeLogs($dbs, 'staff', $_SESSION['uid'], 'system', $_SESSION['realname'].' remove logo', 'Logo', 'Delete');
+    utility::jsToastr(__('System Configuration'), __('Logo Image removed. Refreshing page'), 'success'); 
+    echo '<script type="text/javascript">setTimeout(() => {top.location.href = \''.AWB.'index.php?mod=system\'}, 2500)</script>';
+    exit();
 }
 
 if (isset($_POST['updateData'])) {
-    $imagesConfig = [
-      'image' => [
-        'filename' => 'logo',
-        'extension' => $sysconf['allowed_images'],
-        'max' => $sysconf['max_image_upload']*1024,
-        'configname' => 'logo_image'
-      ],
-      'icon' => [
-        'filename' => 'webicon',
-        'extension' => ['.ico','.png'],
-        'max' => $sysconf['max_image_upload']*1024,
-        'configname' => 'webicon'
-      ]
-    ];
 
-    $updateImageCache = false;
-    foreach ($_FILES as $name => $detail) {
-      if (!isset($imagesConfig[$name])) continue;
-      if (empty($_FILES[$name]['name'])) continue;
-
-      $config = $imagesConfig[$name];
-      $imagesDisk->upload($name, function($imagesDisk) use($config) {
-          // Extension check
-          $imagesDisk->isExtensionAllowed($config['extension']);
-
-          // limitation
-          $imagesDisk->isLimitExceeded($config['max']);
-
-          // exif removal
-          $imagesDisk->cleanExifInfo();
-
-          // destroy it if failed
-          if (!empty($imagesDisk->getError())) $imagesDisk->destroyIfFailed();
-
-      })->as('default' . DS . $config['filename']);
-
-      if ($imagesDisk->getUploadStatus()) {
-        addOrUpdateSetting($config['configname'], $dbs->escape_string($imagesDisk->getUploadedFileName()));
-        $updateImageCache = true;
-      } else {
-          utility::jsToastr('System', __('Image Uploaded Failed') .' : ' . $config['filename'] . '<br/>'.$imagesDisk->getError(), 'error');
-      }
+  if (!empty($_FILES['image']) AND $_FILES['image']['size']) {
+    // remove previous image
+    @unlink(IMGBS.'default/'.$sysconf['logo_image']);
+    // create upload object
+    $image_upload = new simbio_file_upload();
+    $image_upload->setAllowableFormat($sysconf['allowed_images']);
+    $image_upload->setMaxSize($sysconf['max_image_upload']*1024);
+    $image_upload->setUploadDir(IMGBS.'default');
+    $img_upload_status = $image_upload->doUpload('image','logo');
+    if ($img_upload_status == UPLOAD_SUCCESS) {
+      addOrUpdateSetting('logo_image', $dbs->escape_string($image_upload->new_filename));
+    }else{
+      utility::jsToastr(__('System Configuration'), $image_upload->error, 'error'); 
     }
-
     addOrUpdateSetting('static_file_version', rand());
+  }
 
-    // reset/truncate setting table content
-    // library name
-    $library_name = $dbs->escape_string(strip_tags(trim($_POST['library_name'])));
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($library_name)).'\' WHERE setting_name=\'library_name\'');
-
-    // library subname
-    $library_subname = $dbs->escape_string(strip_tags(trim($_POST['library_subname'])));
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($library_subname)).'\' WHERE setting_name=\'library_subname\'');
-
-    // // initialize template arrays
-    // $template = array('theme' => $sysconf['template']['theme'], 'css' => $sysconf['template']['css']);
-    // $admin_template = array('theme' => $sysconf['admin_template']['theme'], 'css' => $sysconf['admin_template']['css']);
-    //
-    // // template
-    // $template['theme'] = $_POST['template'];
-    // $template['css'] = str_replace($sysconf['template']['theme'], $template['theme'], $sysconf['template']['css']);
-    // $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($template)).'\' WHERE setting_name=\'template\'');
-    //
-    // // admin template
-    // $admin_template['theme'] = $_POST['admin_template'];
-    // $admin_template['css'] = str_replace($sysconf['admin_template']['theme'], $admin_template['theme'], $sysconf['admin_template']['css']);
-    // $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($admin_template)).'\' WHERE setting_name=\'admin_template\'');
-
-    // language
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['default_lang'])).'\' WHERE setting_name=\'default_lang\'');
-
-    // timezone
-    addOrUpdateSetting('timezone', utility::filterData('timezone', 'post', true, true, true));
-
-    // search engine
-    addOrUpdateSetting('search_engine', utility::filterData('search_engine', 'post', true, true, true));
-
-    // opac num result
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['opac_result_num'])).'\' WHERE setting_name=\'opac_result_num\'');
-
-    // promoted titles in homepage
-    if (isset($_POST['enable_promote_titles'])) {
-        $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['enable_promote_titles'])).'\' WHERE setting_name=\'enable_promote_titles\'');
-    } else {
-        $dbs->query('UPDATE setting SET setting_value=\'N;\' WHERE setting_name=\'enable_promote_titles\'');
+  if (!empty($_FILES['icon']) AND $_FILES['icon']['size']) {
+    // remove previous image
+    @unlink(IMGBS.'default/'.$sysconf['webicon']);
+    // create upload object
+    $image_upload = new simbio_file_upload();
+    $image_upload->setAllowableFormat(['.ico','.png']);
+    $image_upload->setMaxSize(100*1024);
+    $image_upload->setUploadDir(IMGBS.'default');
+    $img_upload_status = $image_upload->doUpload('icon','webicon');
+    if ($img_upload_status == UPLOAD_SUCCESS) {
+      addOrUpdateSetting('webicon', $dbs->escape_string($image_upload->new_filename));
+    }else{
+      utility::jsToastr(__('System Configuration'), $image_upload->error, 'error'); 
     }
+    addOrUpdateSetting('static_file_version', rand());
+  }
 
-    // quick return
-    $quick_return = $_POST['quick_return'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($quick_return)).'\' WHERE setting_name=\'quick_return\'');
+  // reset/truncate setting table content
+  // library name
+  $library_name = $dbs->escape_string(strip_tags(trim($_POST['library_name'])));
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($library_name)).'\' WHERE setting_name=\'library_name\'');
 
-    // loan and due date manual change
-    $circulation_receipt = $_POST['circulation_receipt'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($circulation_receipt)).'\' WHERE setting_name=\'circulation_receipt\'');
+  // library subname
+  $library_subname = $dbs->escape_string(strip_tags(trim($_POST['library_subname'])));
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($library_subname)).'\' WHERE setting_name=\'library_subname\'');
 
-    // loan and due date manual change
-    $allow_loan_date_change = $_POST['allow_loan_date_change'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($allow_loan_date_change)).'\' WHERE setting_name=\'allow_loan_date_change\'');
+  // // initialize template arrays
+  // $template = array('theme' => $sysconf['template']['theme'], 'css' => $sysconf['template']['css']);
+  // $admin_template = array('theme' => $sysconf['admin_template']['theme'], 'css' => $sysconf['admin_template']['css']);
+  //
+  // // template
+  // $template['theme'] = $_POST['template'];
+  // $template['css'] = str_replace($sysconf['template']['theme'], $template['theme'], $sysconf['template']['css']);
+  // $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($template)).'\' WHERE setting_name=\'template\'');
+  //
+  // // admin template
+  // $admin_template['theme'] = $_POST['admin_template'];
+  // $admin_template['css'] = str_replace($sysconf['admin_template']['theme'], $admin_template['theme'], $sysconf['admin_template']['css']);
+  // $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($admin_template)).'\' WHERE setting_name=\'admin_template\'');
 
-    // loan limit override
-    $loan_limit_override = $_POST['loan_limit_override'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($loan_limit_override)).'\' WHERE setting_name=\'loan_limit_override\'');
+  // language
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['default_lang'])).'\' WHERE setting_name=\'default_lang\'');
 
-    // ignore holidays fine calculation
-    // added by Indra Sutriadi
-    $ignore_holidays_fine_calc = $_POST['ignore_holidays_fine_calc'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($ignore_holidays_fine_calc)).'\' WHERE setting_name=\'ignore_holidays_fine_calc\'');
+  // timezone
+  addOrUpdateSetting('timezone', utility::filterData('timezone', 'post', true, true, true));
 
-    // xml detail
-    $xml_detail = $_POST['enable_xml_detail'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($xml_detail)).'\' WHERE setting_name=\'enable_xml_detail\'');
+  // search engine
+  addOrUpdateSetting('search_engine', utility::filterData('search_engine', 'post', true, true, true));
 
-    // xml result
-    $xml_result = $_POST['enable_xml_result'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($xml_result)).'\' WHERE setting_name=\'enable_xml_result\'');
+  // opac num result
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['opac_result_num'])).'\' WHERE setting_name=\'opac_result_num\'');
 
-    // file download
-    $file_download = $_POST['allow_file_download'] == '1'?true:false;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($file_download)).'\' WHERE setting_name=\'allow_file_download\'');
+  // promoted titles in homepage
+  if (isset($_POST['enable_promote_titles'])) {
+      $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['enable_promote_titles'])).'\' WHERE setting_name=\'enable_promote_titles\'');
+  } else {
+      $dbs->query('UPDATE setting SET setting_value=\'N;\' WHERE setting_name=\'enable_promote_titles\'');
+  }
 
-    // session timeout
-    $session_timeout = intval($_POST['session_timeout']) >= 1800?$_POST['session_timeout']:1800;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($session_timeout)).'\' WHERE setting_name=\'session_timeout\'');
+  // quick return
+  $quick_return = $_POST['quick_return'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($quick_return)).'\' WHERE setting_name=\'quick_return\'');
 
-    // barcode encoding
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['barcode_encoding'])).'\' WHERE setting_name=\'barcode_encoding\'');
+  // loan and due date manual change
+  $circulation_receipt = $_POST['circulation_receipt'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($circulation_receipt)).'\' WHERE setting_name=\'circulation_receipt\'');
 
-    // counter by ip
-    $enable_counter_by_ip = utility::filterData('enable_counter_by_ip', 'post', true, true, true);
-    addOrUpdateSetting('enable_counter_by_ip', $enable_counter_by_ip);
+  // loan and due date manual change
+  $allow_loan_date_change = $_POST['allow_loan_date_change'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($allow_loan_date_change)).'\' WHERE setting_name=\'allow_loan_date_change\'');
 
-    $allowed_counter_ip = utility::filterData('allowed_counter_ip', 'post', true, true, true);
-    $allowed_counter_ip = explode(';', $allowed_counter_ip);
-    $allowed_counter_ip = array_map(function ($ip) {return trim($ip);}, $allowed_counter_ip);
-    addOrUpdateSetting('allowed_counter_ip', $allowed_counter_ip);
+  // loan limit override
+  $loan_limit_override = $_POST['loan_limit_override'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($loan_limit_override)).'\' WHERE setting_name=\'loan_limit_override\'');
 
-    // reserve
-    $reserve_direct_database = utility::filterData('reserve_direct_database', 'post', true, true, true);
-    addOrUpdateSetting('reserve_direct_database', $reserve_direct_database);
-    $reserve_on_loan_only = utility::filterData('reserve_on_loan_only', 'post', true, true, true);
-    addOrUpdateSetting('reserve_on_loan_only', $reserve_on_loan_only);
+  // ignore holidays fine calculation
+  // added by Indra Sutriadi
+  $ignore_holidays_fine_calc = $_POST['ignore_holidays_fine_calc'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($ignore_holidays_fine_calc)).'\' WHERE setting_name=\'ignore_holidays_fine_calc\'');
 
-    // visitor limitation
-    $visitor_limitation = $_POST['enable_visitor_limitation'];
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($visitor_limitation)).'\' WHERE setting_name=\'enable_visitor_limitation\'');
+  // xml detail
+  $xml_detail = $_POST['enable_xml_detail'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($xml_detail)).'\' WHERE setting_name=\'enable_xml_detail\'');
 
-    // time limitation
-    $time_limit = intval($_POST['time_visitor_limitation']) >= 0?$_POST['time_visitor_limitation']:60;
-    $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($time_limit)).'\' WHERE setting_name=\'time_visitor_limitation\'');
+  // xml result
+  $xml_result = $_POST['enable_xml_result'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($xml_result)).'\' WHERE setting_name=\'enable_xml_result\'');
 
-    // spellchecker
-    $spellchecker_enabled = $_POST['spellchecker_enabled'] == '1'?true:false;
-    $dbs->query('REPLACE INTO setting (setting_value, setting_name) VALUES (\''.serialize($spellchecker_enabled).'\',  \'spellchecker_enabled\')');
+  // file download
+  $file_download = $_POST['allow_file_download'] == '1'?true:false;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($file_download)).'\' WHERE setting_name=\'allow_file_download\'');
 
-    // enable chbox confirm
-    addOrUpdateSetting('enable_chbox_confirm', (int)utility::filterData('enable_chbox_confirm', 'post', true, true, true));
+  // session timeout
+  $session_timeout = intval($_POST['session_timeout']) >= 1800?$_POST['session_timeout']:1800;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($session_timeout)).'\' WHERE setting_name=\'session_timeout\'');
 
-    // SSL verification
-    $http = config('http');
-    $http['client']['verify'] = (bool)$_POST['ignore_ssl_verification'];
-    addOrUpdateSetting('http', $http);
+  // barcode encoding
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($_POST['barcode_encoding'])).'\' WHERE setting_name=\'barcode_encoding\'');
+
+  // counter by ip
+  $enable_counter_by_ip = utility::filterData('enable_counter_by_ip', 'post', true, true, true);
+  addOrUpdateSetting('enable_counter_by_ip', $enable_counter_by_ip);
+
+  $allowed_counter_ip = utility::filterData('allowed_counter_ip', 'post', true, true, true);
+  $allowed_counter_ip = explode(';', $allowed_counter_ip);
+  $allowed_counter_ip = array_map(function ($ip) {return trim($ip);}, $allowed_counter_ip);
+  addOrUpdateSetting('allowed_counter_ip', $allowed_counter_ip);
+
+  // reserve
+  $reserve_direct_database = utility::filterData('reserve_direct_database', 'post', true, true, true);
+  addOrUpdateSetting('reserve_direct_database', $reserve_direct_database);
+  $reserve_on_loan_only = utility::filterData('reserve_on_loan_only', 'post', true, true, true);
+  addOrUpdateSetting('reserve_on_loan_only', $reserve_on_loan_only);
+
+  // visitor limitation
+  $visitor_limitation = $_POST['enable_visitor_limitation'];
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($visitor_limitation)).'\' WHERE setting_name=\'enable_visitor_limitation\'');
+
+  // time limitation
+  $time_limit = intval($_POST['time_visitor_limitation']) >= 0?$_POST['time_visitor_limitation']:60;
+  $dbs->query('UPDATE setting SET setting_value=\''.$dbs->escape_string(serialize($time_limit)).'\' WHERE setting_name=\'time_visitor_limitation\'');
+
+  // spellchecker
+  $spellchecker_enabled = $_POST['spellchecker_enabled'] == '1'?true:false;
+  $dbs->query('REPLACE INTO setting (setting_value, setting_name) VALUES (\''.serialize($spellchecker_enabled).'\',  \'spellchecker_enabled\')');
+
+  // enable chbox confirm
+  addOrUpdateSetting('enable_chbox_confirm', (int)utility::filterData('enable_chbox_confirm', 'post', true, true, true));
+
+  // SSL verification
+  $http = config('http');
+  $http['client']['verify'] = (bool)$_POST['ignore_ssl_verification'];
+  addOrUpdateSetting('http', $http);
 
     // fines
     if (isset($_POST['advance_fines'])) {
@@ -271,11 +255,11 @@ if (isset($_POST['updateData'])) {
       Config::createOrUpdate('advance-fines', $_POST['advance_fines']);
     }
 
-    // write log
-    writeLog('staff', $_SESSION['uid'], 'system', $_SESSION['realname'].' change application global configuration', 'Global Config', 'Update');
-    utility::jsToastr(__('System Configuration'), __('Settings saved. Refreshing page'), 'success'); 
-    echo '<script type="text/javascript">setTimeout(() => { top.location.href = \''.AWB.'index.php?mod=system\' }, 2000);</script>';
-    exit();
+  // write log
+  utility::writeLogs($dbs, 'staff', $_SESSION['uid'], 'system', $_SESSION['realname'].' change application global configuration', 'Global Config', 'Update');
+  utility::jsToastr(__('System Configuration'), __('Settings saved. Refreshing page'), 'success'); 
+  echo '<script type="text/javascript">setTimeout(() => { top.location.href = \''.AWB.'index.php?mod=system\' }, 2000);</script>';
+  exit();
 }
 
 /* Config Vars update process end */
@@ -304,10 +288,10 @@ $form->addTextField('text', 'library_subname', __('Library Subname'), $sysconf['
 //logo
 $str_input = '';
 $str_input .= '<strong class="d-block">'.__('Main Logo').'</strong>';
-if(isset($sysconf['logo_image']) && $imagesDisk->isExists('default/'.$sysconf['logo_image']) && $sysconf['logo_image']!=''){
-    $str_input .= '<div style="padding:10px;">';
-    $str_input .= '<img src="../lib/minigalnano/createthumb.php?filename=images/default/'.$sysconf['logo_image'].'&width=130" class="img-fluid rounded" alt="Image cover">';
-    $str_input .= '<a href="'.MWB.'system/index.php" postdata="removeImage=true&limg='.$sysconf['logo_image'].'" class="btn btn-sm btn-danger">'.__('Remove Image').'</a></div>';
+if(isset($sysconf['logo_image']) && file_exists(IMGBS.'default/'.$sysconf['logo_image']) && $sysconf['logo_image']!=''){
+  $str_input .= '<div style="padding:10px;">';
+  $str_input .= '<img src="../lib/minigalnano/createthumb.php?filename=images/default/'.$sysconf['logo_image'].'&width=130" class="img-fluid rounded" alt="Image cover">';
+  $str_input .= '<a href="'.MWB.'system/index.php" postdata="removeImage=true&limg='.$sysconf['logo_image'].'" class="btn btn-sm btn-danger">'.__('Remove Image').'</a></div>';
 }
 $str_input .= '<div class="custom-file col-3 d-block">';
 $str_input .= simbio_form_element::textField('file', 'image', '', 'class="custom-file-input" id="customFile"');
@@ -317,10 +301,10 @@ $str_input .= '<div class="mt-2 ml-2">Maximum '.$sysconf['max_image_upload'].' K
 
 // Web icon
 $str_input .= '<strong class="d-block mt-2">'.__('Favicon').'</strong>';
-if(isset($sysconf['webicon']) && $imagesDisk->isExists('default/'.$sysconf['webicon']) && $sysconf['webicon']!=''){
-    $str_input .= '<div style="padding:10px;">';
-    $str_input .= '<img src="../lib/minigalnano/createthumb.php?filename=images/default/'.$sysconf['webicon'].'&width=130" class="img-fluid rounded" alt="Image cover">';
-    $str_input .= '<a href="'.MWB.'system/index.php" postdata="removeImage=true&wimg='.$sysconf['webicon'].'" class="btn btn-sm btn-danger">'.__('Remove Image').'</a></div>';
+if(isset($sysconf['webicon']) && file_exists(IMGBS.'default/'.$sysconf['webicon']) && $sysconf['webicon']!=''){
+  $str_input .= '<div style="padding:10px;">';
+  $str_input .= '<img src="../lib/minigalnano/createthumb.php?filename=images/default/'.$sysconf['webicon'].'&width=130" class="img-fluid rounded" alt="Image cover">';
+  $str_input .= '<a href="'.MWB.'system/index.php" postdata="removeImage=true&wimg='.$sysconf['webicon'].'" class="btn btn-sm btn-danger">'.__('Remove Image').'</a></div>';
 }
 $str_input .= '<div class="custom-file col-3">';
 $str_input .= simbio_form_element::textField('file', 'icon', '', 'class="custom-file-input" id="customFile"');
@@ -330,10 +314,10 @@ $str_input .= '<div class="mt-2 ml-2">Maximum 100 KB</div>';
 $str_input .= <<<HTML
 <script>
 $('.custom-file input').on('change',function(){
-    //get the file name
-    const fileName = $(this).val();
-    //replace the "Choose a file" label
-    $(this).next('.custom-file-label').html(fileName);
+  //get the file name
+  const fileName = $(this).val();
+  //replace the "Choose a file" label
+  $(this).next('.custom-file-label').html(fileName);
 });
 </script>
 HTML;
@@ -367,7 +351,8 @@ $form->addAnything(__('Logo Image'), $str_input);
 // $form->addSelectList('admin_template', __('Admin Template'), $admin_tpl_options, $sysconf['admin_template']['theme']);
 
 // application language
-$form->addSelectList('default_lang', __('Default App. Language'), Memory::getInstance()->getLanguages(), $sysconf['default_lang'], 'class="form-control col-3"');
+require_once(LANG.'localisation.php');
+$form->addSelectList('default_lang', __('Default App. Language'), $available_languages, $sysconf['default_lang'], 'class="form-control col-3"');
 
 // timezone
 $html  = '<input type="text" class="form-control col-2" name="timezone" value="' . ($sysconf['timezone'] ?? 'Asia/Jakarta') . '"/>';
