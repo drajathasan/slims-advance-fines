@@ -12,6 +12,25 @@ use SLiMS\DB;
 
 $plugins = Plugins::getInstance();
 
+if (!function_exists('pluginUrl'))
+{
+    /**
+     * Generate URL with plugin_container.php?id=<id>&mod=<mod> + custom query
+     *
+     * @param array $data
+     * @param boolean $reset
+     * @return string
+     */
+    function pluginUrl(array $data = [], bool $reset = false): string
+    {
+        // back to base uri
+        if ($reset) return $_SERVER['PHP_SELF'] . '?mod=' . $_GET['mod'] . '&id=' . $_GET['id'];
+        
+        return $_SERVER['PHP_SELF'] . '?' . http_build_query(array_merge($_GET,$data));
+    }
+}
+
+
 // Overriding existing submenu
 $plugins->registerMenu('system', __('System Configuration'), __DIR__ . '/system-config.php');
 $plugins->registerMenu('circulation', __('Loan Rules'), __DIR__ . '/loan_rules.php');
