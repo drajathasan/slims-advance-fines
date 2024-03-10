@@ -107,14 +107,14 @@ if (isset($_POST['saveData'])) {
     if ($error_num == 0) {
         if (!$lrStatus) {
             toastr(__('All Data Successfully Deleted'))->success();
-            echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(\''.$_SERVER['PHP_SELF'].'?'.$_POST['lastQueryStr'].'\');</script>';
+            echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(\''.pluginUrl(reset: true).'\');</script>';
         } else {
             toastr(__('Sorry. There is active loan transaction(s) using this loan rules.'))->info();
-            echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(\''.$_SERVER['PHP_SELF'].'\');</script>';
+            echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(\''.pluginUrl(reset: true).'\');</script>';
         }
     } else {
         toastr(__('Some or All Data NOT deleted successfully!\nPlease contact system administrator'))->success();
-        echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(\''.$_SERVER['PHP_SELF'].'?'.$_POST['lastQueryStr'].'\');</script>';
+        echo '<script language="Javascript">parent.jQuery(\'#mainContent\').simbioAJAX(\''.pluginUrl(reset: true).'\');</script>';
     }
     exit();
 }
@@ -259,7 +259,7 @@ if (isset($_POST['detail']) OR (isset($_GET['action']) AND $_GET['action'] == 'd
     $datagrid->table_attr = 'id="dataList" class="s-table table"';
     $datagrid->table_header_attr = 'class="dataListHeader" style="font-weight: bold;"';
     // set delete proccess URL
-    $datagrid->chbox_form_URL = $_SERVER['PHP_SELF'];
+    $datagrid->chbox_form_URL = pluginUrl();
 
     // put the result into variables
     $datagrid_result = $datagrid->createDataGrid($dbs, $table_spec, 20, ($can_read AND $can_write));
